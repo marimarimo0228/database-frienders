@@ -1,142 +1,138 @@
-# ポケモン対戦支援アプリ データベース設計書
+Markdown
 
-## 1. システム概要
-本システムは、ユーザが手持ちのポケモンを登録し、対戦相手のポケモン情報を入力することで、
-タイプ相性や能力値（特にすばやさ）を考慮して最適な手持ちポケモンを提示するアプリケーションである。
+# ポケモン対戦支援システム データベース設計書
 
----
+## 1. システム構成図 (System Architecture)
 
-## 2. システム構成図
+本システムはMySQLをデータベースとして採用し、PythonやNode.js等のアプリケーションサーバーを介してユーザーと対話する構成とする。
 
-```text
-[ユーザ]
-   |
-   | HTTP
-   v
-[Webアプリケーション]
- (登録・検索・判定ロジック)
-   |
-   | SQL
-   v
-[データベース]
- PostgreSQL / MySQL
-```
+```mermaid
+graph TD
+    User[ユーザー (トレーナー)] -->|ポケモン登録 / 対戦相手入力| App[アプリケーション]
+    App -->|クエリ実行 (SQL)| DB[(MySQL Database)]
+    DB -->|検索結果 (最適なポケモン)| App
+    App -->|結果表示| User
+2. データベース設計 (ER図 & 正規化)
+データの整合性を保つため、第3正規形 (3NF) まで正規化を行っている。
 
----
+正規化の適用
+第1正規形: 繰り返し項目の排除。
 
-## 3. ER図設計（主キー・外部キー・制約）
+第2正規形: ポケモンの種族データ（名称、種族値）を my_pokemons テーブルから分離し、species テーブルとして独立させる。
 
-### 3.1 users（ユーザ）
-| 属性名 | 型 | 制約 |
-|---|---|---|
-| user_id | INT | PK |
-| user_name | VARCHAR | NOT NULL |
+第3正規形: 計算可能な項目や導出項目（タイプ相性など）をマスタデータ type_chart として分離。
 
-### 3.2 types（タイプ）
-| 属性名 | 型 | 制約 |
-|---|---|---|
-| type_id | INT | PK |
-| type_name | VARCHAR | UNIQUE, NOT NULL |
+ER図 (Entity Relationship Diagram)
+コード スニペット
 
-### 3.3 pokemon_master（ポケモンマスタ）
-| 属性名 | 型 | 制約 |
-|---|---|---|
-| pokemon_id | INT | PK |
-| pokemon_name | VARCHAR | NOT NULL |
-| type_id | INT | FK → types(type_id) |
-| attack | INT | NOT NULL |
-| defense | INT | NOT NULL |
-| speed | INT | NOT NULL |
+erDiagram
+    SPECIES ||--o{ MY_POKEMONS : "is instance of"
+    SPECIES }|--|| TYPES : "has type 1"
+    SPECIES }|--|| TYPES : "has type 2"
+    TYPES ||--o{ TYPE_CHART : "attacker"
+    TYPES ||--o{ TYPE_CHART : "defender"
 
-### 3.4 user_pokemon（手持ちポケモン）
-| 属性名 | 型 | 制約 |
-|---|---|---|
-| user_pokemon_id | INT | PK |
-| user_id | INT | FK → users(user_id) |
-| pokemon_id | INT | FK → pokemon_master(pokemon_id) |
+    %% ポケモン図鑑データ（マスタ）
+    SPECIES {
+        int species_id PK "図鑑番号"
+        string name "ポケモン名"
+        int base_speed "種族値: すばやさ"
+        string type1_id FK "タイプ1"
+        string type2_id FK "タイプ2 (NULL可)"
+    }
 
-### 3.5 enemy_pokemon（対戦相手ポケモン）
-| 属性名 | 型 | 制約 |
-|---|---|---|
-| enemy_id | INT | PK |
-| pokemon_id | INT | FK → pokemon_master(pokemon_id) |
+    %% 手持ちポケモン（トランザクション）
+    MY_POKEMONS {
+        int id PK "管理ID"
+        int species_id FK "種族ID"
+        string nickname "ニックネーム"
+        int level "レベル"
+        int individual_speed "実数値: すばやさ"
+        datetime created_at "登録日"
+    }
 
-### 3.6 type_effectiveness（タイプ相性）
-| 属性名 | 型 | 制約 |
-|---|---|---|
-| attack_type_id | INT | PK, FK → types(type_id) |
-| defense_type_id | INT | PK, FK → types(type_id) |
-| effectiveness | DECIMAL | NOT NULL |
+    %% タイプマスタ
+    TYPES {
+        string type_id PK "タイプ名 (例: Fire)"
+    }
 
----
+    %% タイプ相性表
+    TYPE_CHART {
+        int id PK
+        string attacker_type_id FK "攻撃側タイプ"
+        string defender_type_id FK "防御側タイプ"
+        float multiplier "倍率 (2.0, 0.5, 1.0, 0.0)"
+    }
+3. テーブル定義 (DDL概要)
+各テーブルには適切な主キー(PK)および外部キー(FK)制約を設定する。
 
-## 4. トランザクション処理設計
+species (種族マスタ)
+PRIMARY KEY: species_id
 
-### 手持ちポケモン登録処理
-```sql
-BEGIN;
+Constraint: name は UNIQUE制約とする。
 
-INSERT INTO user_pokemon(user_id, pokemon_id)
-VALUES (1, 25);
+my_pokemons (手持ちポケモン)
+PRIMARY KEY: id (AUTO_INCREMENT)
+
+FOREIGN KEY: species_id は species(species_id) を参照する。
+
+type_chart (タイプ相性)
+Check Constraint: multiplier カラムには有効な倍率値のみ許可するよう設定を推奨。
+
+4. 機能別 SQL設計 & ロジック
+① 手持ちポケモンの登録 (Transaction)
+データの不整合を防ぐため、登録処理はトランザクションを用いて実行する。
+
+SQL
+
+START TRANSACTION;
+
+-- 例: レベル50のピカチュウ(ID:25)を登録する場合
+INSERT INTO my_pokemons (species_id, nickname, level, individual_speed, created_at)
+VALUES (25, 'マイピカ', 50, 150, NOW());
 
 COMMIT;
-```
+② 最適な手持ちポケモンの選出 (Join & Subquery)
+以下の条件に基づき、最適なポケモンを抽出する。
 
-### エラー発生時
-```sql
-ROLLBACK;
-```
+攻撃相性が有利であること（タイプ相性倍率が2.0以上）
 
-トランザクションにより、途中失敗時でもデータの整合性が保たれる。
+相手よりすばやさが高いこと
 
----
+前提: 対戦相手のポケモンが「タイプ: Fire」「すばやさ: 160」である場合。
 
-## 5. JOIN・副問い合わせ設計
+SQL
 
-### 5.1 JOINを用いた有利ポケモン検索
-```sql
-SELECT pm.pokemon_name, pm.attack, pm.speed, te.effectiveness
-FROM user_pokemon up
-JOIN pokemon_master pm ON up.pokemon_id = pm.pokemon_id
-JOIN enemy_pokemon ep ON ep.enemy_id = 1
-JOIN pokemon_master epm ON ep.pokemon_id = epm.pokemon_id
-JOIN type_effectiveness te
-  ON pm.type_id = te.attack_type_id
- AND epm.type_id = te.defense_type_id
-WHERE up.user_id = 1
-ORDER BY te.effectiveness DESC, pm.speed DESC;
-```
+-- 相手のタイプ(Fire)に対して有利、かつ相手より速い自分のポケモンを抽出
+SELECT 
+    mp.nickname,
+    s.name AS species_name,
+    mp.individual_speed,
+    tc.multiplier AS type_advantage
+FROM 
+    my_pokemons mp
+JOIN 
+    species s ON mp.species_id = s.species_id
+JOIN 
+    -- 自身のタイプ1で攻撃する場合の相性を結合
+    type_chart tc ON tc.attacker_type_id = s.type1_id
+WHERE 
+    tc.defender_type_id = 'Fire' -- 敵のタイプ
+    AND tc.multiplier >= 2.0     -- 効果抜群以上
+    AND mp.individual_speed > 160 -- 相手より速い
+ORDER BY 
+    tc.multiplier DESC,          -- 倍率が高い順
+    mp.individual_speed DESC;    -- さらに速い順
+副文 (Subquery) の活用例
+平均レベル以上のポケモンのみを検索対象とする場合などに副文を使用する。
 
-### 5.2 副問い合わせの例（平均以上のすばやさ）
-```sql
-SELECT pokemon_name
-FROM pokemon_master
-WHERE speed >= (
-  SELECT AVG(speed)
-  FROM pokemon_master
-);
-```
+SQL
 
----
+SELECT * FROM my_pokemons 
+WHERE level > (SELECT AVG(level) FROM my_pokemons); -- 平均レベルより高い個体のみ抽出
+5. 今後の拡張性について
+現行の仕様は基本的な構成であるが、今後の拡張として以下が考えられる。
 
-## 6. 正規化設計
+技（Moves）テーブルの追加: ポケモン自身のタイプではなく、習得している「技のタイプ」に基づいた相性計算の実装。
 
-### 第1正規形
-- 繰り返し属性を排除
-- 1セル1値を保証
-
-### 第2正規形
-- 複合主キーに完全関数従属しない属性を分離
-- タイプ相性を独立テーブルとして定義
-
-### 第3正規形
-- 推移的関数従属を排除
-- タイプ情報とポケモン情報を分離
-
-本設計は第3正規形を満たし、冗長性や更新異常を防いでいる。
-
----
-
-## 7. まとめ
-本データベース設計により、ユーザの手持ちポケモンと対戦相手ポケモンを効率的に管理し、
-JOINや副問い合わせを用いてタイプ相性と能力値に基づいた最適なポケモン選択を実現できる。
+特性（Abilities）の実装: 「ふゆう」等の特性によるタイプ相性の無効化・変化ロジックの追加。
