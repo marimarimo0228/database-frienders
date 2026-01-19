@@ -15,3 +15,6 @@ pokemon_app/
 アプリに必要なコードは作成済み
 githubのテスト用リポジトリに全部あげてrenderからテストしたい
 renderで動かすフォルダ指定できるのならこのリポジトリだけで良し
+
+render用アドレス
+https://pokemon-test-bd6t.onrender.com/
