@@ -2,108 +2,271 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ポケモンバトル支援システム </title>
+    <title>Pokémon Battle Support</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f0f8ff; font-family: 'Hiragino Kaku Gothic ProN', sans-serif; }
-        .container { margin-top: 30px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .header { text-align: center; margin-bottom: 30px; color: #333; }
-        .party-list { list-style: none; padding: 0; }
-        .party-item { background: #fff; border: 1px solid #ddd; padding: 10px; margin-bottom: 5px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .btn-delete { background-color: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 5px; font-size: 0.8em; }
-        .result-card { background-color: #e3f2fd; border-left: 5px solid #2196f3; padding: 15px; margin-top: 20px; border-radius: 8px; }
-        .badge-effectiveness { font-size: 1em; padding: 5px 10px; }
+        :root {
+            --poke-red: #EE1515;
+            --poke-white: #FFFFFF;
+            --poke-bg: #F0F2F5;
+            --poke-dark: #222224;
+            --poke-ui-border: #e0e0e0;
+        }
+        body {
+            background-color: var(--poke-bg);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            color: var(--poke-dark);
+        }
+        .navbar {
+            background-color: var(--poke-red);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            padding: 1rem;
+        }
+        .navbar-brand {
+            color: white !important;
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            background: var(--poke-white);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .card-header {
+            background-color: var(--poke-dark);
+            color: white;
+            font-weight: bold;
+            padding: 12px 20px;
+        }
+        .card-header.red-theme { background-color: var(--poke-red); }
+        .btn-primary {
+            background-color: var(--poke-red);
+            border-color: var(--poke-red);
+            font-weight: bold;
+        }
+        .btn-primary:hover {
+            background-color: #cc0000;
+            border-color: #cc0000;
+        }
+        .btn-dark {
+            background-color: var(--poke-dark);
+            border: none;
+        }
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1px solid var(--poke-ui-border);
+            padding: 10px;
+        }
+        .badge-type { background-color: var(--poke-dark); color: white; }
+        .table-custom th { border-top: none; color: #888; font-size: 0.85rem; }
+        .table-custom td { vertical-align: middle; }
     </style>
 </head>
 <body>
 
+<nav class="navbar mb-4">
+    <div class="container">
+        <span class="navbar-brand">ポケモンバトル支援システム</span>
+    </div>
+</nav>
+
 <div class="container">
-    <div class="header">
-        <h1>ポケモンバトル支援システム </h1>
-    </div>
-
-    <div class="row">
-        <div class="col-md-5">
-            <div class="card p-3 shadow-sm">
-                <h3>現在の手持ち </h3>
-                <ul class="party-list">
-                    {% for p in my_party %}
-                    <li class="party-item">
-                        <span><strong>{{ p.pokemon.pokemon_name }}</strong> <small class="text-muted">(ID:{{ p.pokemon.pokemon_id }})</small></span>
-                        <form action="{{ url_for('delete_pokemon', user_pokemon_id=p.user_pokemon_id) }}" method="POST" style="margin: 0;">
-                            <button type="submit" class="btn-delete">削除</button>
-                        </form>
-                    </li>
-                    {% endfor %}
-                    {% if not my_party %}
-                    <p class="text-muted">手持ちが空です！下記から登録してください！！</p>
-                    {% endif %}
-                </ul>
-
-                <hr>
-
-                <h5>新しいポケモンを登録 ⚔️</h5>
-                <form action="{{ url_for('add_pokemon') }}" method="POST" class="d-flex gap-2">
-                    <select name="pokemon_id" class="form-select" required>
-                        <option value="">選択してください</option>
-                        {% for p in all_pokemon %}
-                        <option value="{{ p.pokemon_id }}">{{ p.pokemon_name }}</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="btn btn-primary">登録</button>
-                </form>
-            </div>
-        </div>
-
-        <div class="col-md-7">
-            <div class="card p-3 shadow-sm border-danger">
-                <h3>対戦相手を選択 </h3>
-                <form action="/" method="GET" class="d-flex gap-2 mb-3">
-                    <select name="enemy_id" class="form-select" required>
-                        <option value="">相手ポケモンを選んでください</option>
-                        {% for p in all_pokemon %}
-                        <option value="{{ p.pokemon_id }}" {% if enemy and enemy.pokemon_id == p.pokemon_id %}selected{% endif %}>
-                            {{ p.pokemon_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="btn btn-danger">解析</button>
-                </form>
-
-                {% if enemy %}
-                <div class="alert alert-warning">
-                    <strong>対戦相手: {{ enemy.pokemon_name }}</strong> (タイプID: {{ enemy.type_id }})
+    <div class="row g-4">
+        
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">📖 ポケモン図鑑から登録</div>
+                <div class="card-body">
+                    <form action="/add" method="POST" class="d-flex gap-2">
+                        <select name="pokemon_id" class="form-select">
+                            <option value="">図鑑から選択...</option>
+                            {% for p in all_pokemon %}
+                            <option value="{{ p.pokemon_id }}">
+                                No.{{ p.pokemon_id }} {{ p.pokemon_name }} ({{ p.type.type_name }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-primary text-nowrap">追加</button>
+                    </form>
                 </div>
+            </div>
 
-                <h4>推奨ポケモン（選出）</h4>
-                {% if results %}
-                    {% for p_master, eff in results %}
-                    <div class="result-card">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="mb-0">{{ p_master.pokemon_name }}</h5>
-                                <small>素早さ: {{ p_master.speed }} | 攻撃力: {{ p_master.attack }}</small>
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">🧪 未知のポケモンを登録（カスタム作成）</div>
+                <div class="card-body">
+                    <form action="/add_custom" method="POST">
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="small text-muted">名前</label>
+                                <input type="text" name="custom_name" class="form-control" placeholder="例: ミュウツー" required>
                             </div>
-                            <span class="badge bg-success badge-effectiveness">{{ eff }}倍！🔥</span>
+                            <div class="col-md-6">
+                                <label class="small text-muted">タイプ</label>
+                                <select name="custom_type_id" class="form-select" required>
+                                    {% for t in all_types %}
+                                    <option value="{{ t.type_id }}">{{ t.type_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="small text-muted">素早さ (種族値)</label>
+                                <input type="number" name="custom_speed" class="form-control" placeholder="例: 130" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="small text-muted">メモ</label>
+                                <input type="text" name="custom_memo" class="form-control" placeholder="例: 最強のポケモン">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-dark w-100">データを作成して手持ちへ！</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">現在の手持ち</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-custom table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="ps-3">ポケモン</th>
+                                    <th>メモ (更新可)</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in my_party %}
+                                <tr>
+                                    <td class="ps-3">
+                                        <div class="fw-bold">{{ p.pokemon.pokemon_name }}</div>
+                                        <span class="badge badge-type rounded-pill">{{ p.pokemon.type.type_name }}</span>
+                                    </td>
+                                    <td>
+                                        <form action="/update/{{ p.user_pokemon_id }}" method="POST" class="d-flex align-items-center">
+                                            <input type="text" name="memo" value="{{ p.memo }}" class="form-control form-control-sm me-1" style="min-width: 80px;">
+                                            <button type="submit" class="btn btn-sm btn-outline-success text-nowrap">保存</button>
+                                        </form>
+                                    </td>
+                                    <td>
+                                        <form action="/delete/{{ p.user_pokemon_id }}" method="POST">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger text-nowrap">削除</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if not my_party %}
+                                <tr><td colspan="3" class="text-center text-muted py-4">手持ちがいません</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
                     </div>
-                    {% endfor %}
-                {% else %}
-                    <p class="text-danger mt-3">手持ちの中に、有利な相性のポケモンがいません</p>
-                {% endif %}
-                {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header red-theme">⚔️ 分析フィールド</div>
+                <div class="card-body">
+                    <label class="form-label fw-bold">対戦相手を選択</label>
+                    <form action="/" method="GET" class="d-flex gap-2 mb-4">
+                        <select name="enemy_id" class="form-select">
+                            <option value="">相手を選んでください...</option>
+                            {% for p in all_pokemon %}
+                            <option value="{{ p.pokemon_id }}" {% if enemy and enemy.pokemon_id == p.pokemon_id %}selected{% endif %}>
+                                {{ p.pokemon_name }} ({{ p.type.type_name }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-primary" style="height: auto; line-height: 1.2;">
+                            分析<br>開始
+                        </button>
+                    </form>
+
+                    {% if enemy %}
+                    <div class="alert alert-secondary border-0">
+                        <small class="text-muted">ENEMY</small><br>
+                        <strong class="fs-5">{{ enemy.pokemon_name }}</strong> 
+                        <span class="badge bg-dark ms-2">{{ enemy.type.type_name }}</span>
+                    </div>
+
+                    {% if results %}
+                        <h5 class="mt-4 mb-3 fw-bold text-danger">推奨ポケモン (1倍以上)</h5>
+                        <div class="list-group mb-4">
+                        {% for p_master, user_p, eff_value in results %}
+                            {% if eff_value >= 1.0 %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-bold">
+                                        {{ p_master.pokemon_name }}
+                                        {% if user_p.memo %}
+                                            <span class="badge bg-warning text-dark ms-2">📝 {{ user_p.memo }}</span>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">
+                                        タイプ: {{ p_master.type.type_name }} / 素早さ: {{ p_master.speed }}
+                                    </small>
+                                </div>
+                                <span class="badge bg-danger rounded-pill fs-6">{{ eff_value }}倍</span>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        </div>
+
+                        <h5 class="mb-3 fw-bold text-primary">いまひとつのポケモン</h5>
+                        <div class="list-group">
+                        {% for p_master, user_p, eff_value in results %}
+                            {% if eff_value < 1.0 %}
+                            <div class="list-group-item list-group-item-light d-flex justify-content-between align-items-center" style="opacity: 0.8;">
+                                <div>
+                                    <div class="fw-bold text-muted">
+                                        {{ p_master.pokemon_name }}
+                                        {% if user_p.memo %}
+                                            <span class="badge bg-secondary text-light ms-2">📝 {{ user_p.memo }}</span>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">
+                                        タイプ: {{ p_master.type.type_name }} / 素早さ: {{ p_master.speed }}
+                                    </small>
+                                </div>
+                                <span class="badge bg-primary rounded-pill fs-6">{{ eff_value }}倍</span>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <p>手持ちポケモンがいません。</p>
+                        </div>
+                    {% endif %}
+                    {% else %}
+                        <div class="text-center py-5 text-muted opacity-50">
+                            <h1 class="display-1">VS</h1>
+                            <p>相手ポケモンを選択して解析を開始してください</p>
+                        </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
 
-    <footer class="mt-5 text-center text-muted">
-        <hr>
-        <p>&copy; 2026 フレンダーズ </p>
-    </footer>
+    <div class="text-center mt-5 mb-5">
+        <hr class="mb-4">
+        <form action="/reset" method="POST" onsubmit="return confirm('本当に初期化しますか？\n追加したポケモンも全て消えます！');">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                ⚠️ システムを初期化する (121体に戻す)
+            </button>
+        </form>
+        <p class="text-muted small mt-2">&copy; 2026 Pokémon Battle Support System</p>
+    </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 
