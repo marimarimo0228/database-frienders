@@ -1,15 +1,6 @@
 # database-frienders
 グループ名フレンダーズの課題リポジトリ
 
-
-pokemon_app/
-├── app.py              # アプリケーション本体
-├── models.py           # データベース定義（SQLAlchemy）
-├── pokemon.db          # 121体のデータが投入済みのDBファイル
-├── requirements.txt    # 必要なライブラリ
-└── templates/
-    └── index.html      # 画面デザイン
-
 render用アドレス
 https://pokemon-test-bd6t.onrender.com/
 
