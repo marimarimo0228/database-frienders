@@ -25,7 +25,7 @@ https://pokemon-test-bd6t.onrender.com/
 * **Database**: PostgreSQL (Render Managed)
 * **Infrastructure**: Render (PaaS)
 
-## 📊 データベース設計 (Database Design)
+## データベース設計 (Database Design)
 データの整合性と拡張性を担保するため、**第3正規形 (3NF)** まで正規化を行っています。
 
 * **PokemonMaster**: ポケモン基本情報（マスタ）
